@@ -2,15 +2,17 @@ const { preprocessText } = require('./preprocessText');
 const { streamSpeechToFile } = require('./openaiTts');
 const { playAudioFile } = require('./playback');
 
-// Later Electron integration can call this from the main process or an IPC handler.
 async function speak(text, options = {}) {
-  const processedText = preprocessText(text);
+  const processedText = options.preprocessed ? text : preprocessText(text);
 
   if (!processedText) {
     throw new Error('Cannot speak empty text.');
   }
 
-  const outputPath = await streamSpeechToFile(processedText, options.outputPath, options);
+  const outputPath = await streamSpeechToFile(processedText, options.outputPath, {
+    ...options,
+    preprocessed: true
+  });
 
   try {
     await playAudioFile(outputPath, options);

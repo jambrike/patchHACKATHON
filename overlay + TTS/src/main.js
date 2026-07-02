@@ -1,7 +1,8 @@
 const electron = require('electron');
 const path = require('path');
+const readline = require('readline');
 const { loadEnvFile } = require('./config/loadEnv');
-const { speak, preprocessText } = require('./tts');
+const { preprocessText } = require('./tts/preprocessText');
 
 loadEnvFile();
 
@@ -13,6 +14,8 @@ if (!electron.app) {
 const { app, BrowserWindow, ipcMain, screen } = electron;
 
 let overlayWindow;
+let terminalInput;
+let speechQueue = Promise.resolve();
 
 function createOverlayWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -56,12 +59,57 @@ function createOverlayWindow() {
   overlayWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
+function startTerminalTtsInput() {
+  if (!process.stdin.isTTY || terminalInput) return;
+
+  terminalInput = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: 'TTS> '
+  });
+
+  console.log('Type text in this terminal and press Enter to speak it. Press Ctrl+C to quit.');
+  terminalInput.prompt();
+
+  terminalInput.on('line', (line) => {
+    const text = preprocessText(line);
+
+    if (!text) {
+      console.log('[terminal tts] Empty input ignored.');
+      terminalInput.prompt();
+      return;
+    }
+
+    console.log(`[terminal tts] ${text}`);
+
+    speechQueue = speechQueue
+      .then(() => speakFromTerminal(text))
+      .catch((error) => {
+        console.error(`[terminal tts] ${error.message || 'Text-to-speech failed.'}`);
+      })
+      .finally(() => {
+        terminalInput.prompt();
+      });
+  });
+
+  terminalInput.on('SIGINT', () => {
+    terminalInput.close();
+    app.quit();
+  });
+}
+
+async function speakFromTerminal(text) {
+  const { speak } = require('./tts');
+  await speak(text, { preprocessed: true });
+}
+
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.dock.hide();
   }
 
   createOverlayWindow();
+  startTerminalTtsInput();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -90,7 +138,7 @@ ipcMain.on('overlay:expand', () => {
   overlayWindow.setSize(360, 210, true);
 });
 
-ipcMain.on('overlay:input', async (_event, value) => {
+ipcMain.on('overlay:input', (_event, value) => {
   const text = preprocessText(value);
 
   if (!text) {
@@ -99,10 +147,4 @@ ipcMain.on('overlay:input', async (_event, value) => {
   }
 
   console.log(`[overlay input] ${text}`);
-
-  try {
-    await speak(text);
-  } catch (error) {
-    console.error(`[overlay tts] ${error.message || 'Text-to-speech failed.'}`);
-  }
 });

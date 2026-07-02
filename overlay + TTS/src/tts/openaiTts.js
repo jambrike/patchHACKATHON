@@ -4,10 +4,10 @@ const path = require('path');
 const { once } = require('events');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
-const OpenAI = require('openai');
 const { preprocessText } = require('./preprocessText');
 
 const pipelineAsync = promisify(pipeline);
+let cachedClient;
 const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts';
 const DEFAULT_TTS_VOICE = 'alloy';
 const DEFAULT_AUDIO_FORMAT = 'mp3';
@@ -26,7 +26,7 @@ function getTtsConfig(options = {}) {
 }
 
 async function streamSpeechToFile(text, outputPath, options = {}) {
-  const processedText = preprocessText(text);
+  const processedText = options.preprocessed ? text : preprocessText(text);
 
   if (!processedText) {
     throw new Error('Cannot create speech from empty text.');
@@ -38,7 +38,7 @@ async function streamSpeechToFile(text, outputPath, options = {}) {
 
   const config = getTtsConfig(options);
   const targetPath = outputPath || createTempAudioPath(config.responseFormat);
-  const client = options.client || new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = options.client || getOpenAIClient();
 
   let response;
 
@@ -117,6 +117,15 @@ function finishWritable(output) {
   });
 }
 
+function getOpenAIClient() {
+  if (!cachedClient) {
+    const OpenAI = require('openai');
+    cachedClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+
+  return cachedClient;
+}
+
 function safeErrorMessage(error) {
   if (!error) return 'unknown error';
   return error.message || String(error);
@@ -127,3 +136,4 @@ module.exports = {
   createTempAudioPath,
   getTtsConfig
 };
+

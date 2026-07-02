@@ -11,7 +11,7 @@ npm start
 
 ## Terminal Text-to-Speech
 
-The project also includes a standalone OpenAI text-to-speech CLI. It is separate from the Electron UI for now, so it can later be reused from the app without mixing UI and API code.
+The project includes OpenAI text-to-speech from the terminal. When the Electron overlay is running with `npm start`, type text into the terminal prompt and press Enter to speak it. The overlay text box no longer triggers TTS.
 
 Install dependencies:
 
@@ -58,7 +58,7 @@ OPENAI_TTS_MODEL=gpt-4o-mini-tts
 OPENAI_TTS_VOICE=alloy
 ```
 
-The TTS module streams the OpenAI audio response to a temporary WAV file, plays it with an OS-native player, then removes the file. On Windows it uses PowerShell `Media.SoundPlayer`; on macOS it uses `afplay`. This keeps playback isolated in `src/tts/playback.js` and leaves the structure ready for direct stream playback later.
+The TTS module streams the OpenAI audio response to a temporary MP3 file, plays it with an OS-native player, then removes the file. On Windows it uses PowerShell `System.Windows.Media.MediaPlayer`; on macOS it uses `afplay`. This keeps playback isolated in `src/tts/playback.js` and leaves the structure ready for direct stream playback later.
 
 Reusable functions are exported from `src/tts`:
 
@@ -66,7 +66,7 @@ Reusable functions are exported from `src/tts`:
 const { speak, streamSpeechToFile, preprocessText, playAudioFile } = require('./src/tts');
 ```
 
-The Electron overlay now calls `speak(text)` from the main process when text is submitted with Enter. The renderer still does not call OpenAI directly.
+The Electron main process now reads terminal input with a `TTS>` prompt and calls `speak(text)` there. The overlay text box only logs submitted text and clears itself; it does not call OpenAI.
 
 ## macOS Notes
 
@@ -74,3 +74,4 @@ The Electron overlay now calls `speak(text)` from the main process when text is 
 - Drag it by the mascot or the top handle area.
 - Use `Cmd+Q` to quit.
 - It is configured to appear on all workspaces and sit above fullscreen apps where macOS allows it.
+
