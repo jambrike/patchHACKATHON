@@ -1,6 +1,5 @@
 const electron = require('electron');
 const path = require('path');
-const readline = require('readline');
 const { loadEnvFile } = require('./config/loadEnv');
 const { preprocessText } = require('./tts/preprocessText');
 
@@ -14,7 +13,6 @@ if (!electron.app) {
 const { app, BrowserWindow, ipcMain, screen } = electron;
 
 let overlayWindow;
-let terminalInput;
 let speechQueue = Promise.resolve();
 
 function createOverlayWindow() {
@@ -59,48 +57,20 @@ function createOverlayWindow() {
   overlayWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
-function startTerminalTtsInput() {
-  if (!process.stdin.isTTY || terminalInput) return;
-
-  terminalInput = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: 'TTS> '
-  });
-
-  console.log('Type text in this terminal and press Enter to speak it. Press Ctrl+C to quit.');
-  terminalInput.prompt();
-
-  terminalInput.on('line', (line) => {
-    const text = preprocessText(line);
-
-    if (!text) {
-      console.log('[terminal tts] Empty input ignored.');
-      terminalInput.prompt();
-      return;
-    }
-
-    console.log(`[terminal tts] ${text}`);
-
-    speechQueue = speechQueue
-      .then(() => speakFromTerminal(text))
-      .catch((error) => {
-        console.error(`[terminal tts] ${error.message || 'Text-to-speech failed.'}`);
-      })
-      .finally(() => {
-        terminalInput.prompt();
-      });
-  });
-
-  terminalInput.on('SIGINT', () => {
-    terminalInput.close();
-    app.quit();
-  });
+function enqueueOverlaySpeech(text) {
+  speechQueue = speechQueue
+    .catch(() => {})
+    .then(() => speakOverlayText(text));
 }
 
-async function speakFromTerminal(text) {
+async function speakOverlayText(text) {
   const { speak } = require('./tts');
-  await speak(text, { preprocessed: true });
+
+  try {
+    await speak(text, { preprocessed: true });
+  } catch (error) {
+    console.error(`[overlay tts] ${error.message || 'Text-to-speech failed.'}`);
+  }
 }
 
 app.whenReady().then(() => {
@@ -109,7 +79,6 @@ app.whenReady().then(() => {
   }
 
   createOverlayWindow();
-  startTerminalTtsInput();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -147,4 +116,5 @@ ipcMain.on('overlay:input', (_event, value) => {
   }
 
   console.log(`[overlay input] ${text}`);
+  enqueueOverlaySpeech(text);
 });

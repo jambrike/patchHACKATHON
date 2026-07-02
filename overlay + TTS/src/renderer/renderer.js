@@ -16,7 +16,12 @@ helperText.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter' || event.shiftKey) return;
 
   event.preventDefault();
-  window.overlayControls.printInput(helperText.value);
+
+  const text = helperText.value.trim();
+  if (text) {
+    window.overlayControls.printInput(text);
+  }
+
   helperText.value = '';
   localStorage.setItem(NOTE_STORAGE_KEY, '');
 });
@@ -37,3 +42,4 @@ expandButton.addEventListener('click', () => {
   window.overlayControls.expand();
   helperText.focus();
 });
+
